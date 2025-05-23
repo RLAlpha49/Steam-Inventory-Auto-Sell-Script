@@ -1,4 +1,4 @@
-# Steam Inventory Auto Sell Helper
+# Steam Inventory Auto Sell Script
 
 A Tampermonkey userscript to automatically list items in your Steam Community inventory on the Steam Marketplace.
 
