@@ -19,7 +19,7 @@ A Tampermonkey userscript to automatically list items in your Steam Community in
 
 1. Install a userscript manager (Tampermonkey is recommended).
 2. In Tampermonkey, click **Dashboard** → **+** (Add a new script).
-3. Delete any default template code, then copy & paste the contents of `steam_inventory_auto_sell_helper.js` into the editor.
+3. Delete any default template code, then copy & paste the contents of `main.js` into the editor.
 4. Save the script (File → Save or pressing **Ctrl+S**).
 5. Reload or navigate to your Steam inventory page; you should see a **Start Script** button appear.
 
@@ -38,7 +38,7 @@ A Tampermonkey userscript to automatically list items in your Steam Community in
 
 ## Configuration
 
-- DEBUG mode: Edit the `DEBUG` constant at the top of `steam_inventory_auto_sell_helper.js` to `true` for verbose debug logs.
+- DEBUG mode: Edit the `DEBUG` constant at the top of `main.js` to `true` for verbose debug logs.
 
 ## Known Issues & Limitations
 
