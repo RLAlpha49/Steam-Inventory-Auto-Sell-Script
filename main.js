@@ -3,7 +3,7 @@
 // @description  Automatically list items in your Steam inventory.
 // @version      1.0.0
 // @author       RLAlpha49
-// @namespace    http://tampermonkey.net/
+// @namespace    https://github.com/RLAlpha49/Steam-Inventory-Auto-Sell-Script
 // @license      MIT
 // @match        https://steamcommunity.com/id/*/inventory*
 // @grant        none
