@@ -28,7 +28,6 @@ A userscript that helps you list **marketable** items from your Steam Community 
    - Handle fallback scenarios and retry logic for rate-limited price data.
 4. Monitor the browser console (`F12` → Console) for status logs and any errors.
 5. Click **Stop** at any time to halt processing (it stops as soon as the script reaches its next stop-check; it may finish the current item first).
-
    - Optional: enable **Stop after page** if you want it to stop cleanly after the current page.
    - Optional: click **Pause** if you need it to temporarily stop between actions.
 

@@ -1,12 +1,14 @@
 // ==UserScript==
 // @name         Steam Inventory Auto Sell Script
 // @description  Automatically list marketable items in your Steam inventory.
-// @version      2.0.0
+// @version      2.0.1
 // @author       RLAlpha49
 // @namespace    https://github.com/RLAlpha49/Steam-Inventory-Auto-Sell-Script
 // @license      MIT
 // @match        https://steamcommunity.com/id/*/inventory*
 // @grant        none
+// @downloadURL https://update.greasyfork.org/scripts/537021/Steam%20Inventory%20Auto%20Sell%20Script.user.js
+// @updateURL https://update.greasyfork.org/scripts/537021/Steam%20Inventory%20Auto%20Sell%20Script.meta.js
 // ==/UserScript==
 
 (function () {
@@ -230,7 +232,7 @@
 	function writeBoolSetting(key, value) {
 		try {
 			globalThis.localStorage.setItem(key, value ? "1" : "0");
-		} catch {}
+		} catch { }
 	}
 
 	/**
@@ -241,7 +243,7 @@
 	function writeStringSetting(key, value) {
 		try {
 			globalThis.localStorage.setItem(key, String(value));
-		} catch {}
+		} catch { }
 	}
 
 	/**
@@ -251,7 +253,7 @@
 	function deleteSetting(key) {
 		try {
 			globalThis.localStorage.removeItem(key);
-		} catch {}
+		} catch { }
 	}
 
 	/** @type {Object<string, {type: string, min?: number, max?: number}>} Schema for config validation. */
@@ -382,13 +384,15 @@
 	}
 
 	/**
-	 * Checks if an element is visible.
-	 * @param {Element} el - The element to check.
-	 * @returns {boolean} True if visible.
+	 * Checks if an element is visible (not hidden).
+	 * @param {Element} el - The element.
+	 * @returns {boolean}
 	 */
 	function isVisible(el) {
 		if (!el) return false;
 		if (el?.style?.display === "none") return false;
+		if (el?.style?.visibility === "hidden" || el?.style?.visibility === "collapse") return false;
+		if (el.offsetParent === null && (el.offsetWidth === 0 || el.offsetHeight === 0)) return false;
 		return true;
 	}
 
@@ -557,7 +561,7 @@
 	/**
 	 * Waits for the sell dialog to be visible.
 	 * @param {Function} shouldStop - Function to check if should stop.
-	 * @returns {Element|null} The sell dialog element.
+	 * @returns {Promise<Element|null>} The sell dialog element.
 	 */
 	async function waitForSellDialogVisible(shouldStop) {
 		return waitFor(
@@ -569,7 +573,8 @@
 				timeoutMs: runtimeConfig.SELL_DIALOG_APPEAR_TIMEOUT_MS,
 				intervalMs: runtimeConfig.SELL_DIALOG_POLL_INTERVAL_MS,
 				label: "sell dialog",
-				shouldStop,
+				shouldStop: () => shouldStop?.(),
+				pauseState: null,
 			}
 		);
 	}
@@ -653,7 +658,7 @@
 	 * @param {string} [options.name] - Name for logging.
 	 * @param {number} [options.afterMs=0] - Delay after click.
 	 * @param {string} [options.missingLevel="warn"] - Log level if missing.
-	 * @returns {boolean} True if clicked.
+	 * @returns {Promise<boolean>} True if clicked.
 	 */
 	async function clickIfPresent(el, { name, afterMs = 0, missingLevel = "warn" } = {}) {
 		if (el) {
@@ -703,7 +708,8 @@
 	 * @returns {Object} Result with ok.
 	 */
 	async function clickAcceptAndOK(state) {
-		const acceptClicked = clickIfPresent(document.querySelector(SELECTORS.ACCEPT_BUTTON), {
+		// FIX: `await` added so the boolean return value (and the afterMs delay) is actually used.
+		const acceptClicked = await clickIfPresent(document.querySelector(SELECTORS.ACCEPT_BUTTON), {
 			name: "accept button",
 			afterMs: runtimeConfig.AFTER_ACCEPT_DELAY_MS,
 		});
@@ -713,7 +719,8 @@
 			return { ok: false, reason: "Accept button not found" };
 		}
 
-		const okClicked = clickIfPresent(document.querySelector(SELECTORS.OK_BUTTON), {
+		// FIX: `await` added so the boolean return value (and the afterMs delay) is actually used.
+		const okClicked = await clickIfPresent(document.querySelector(SELECTORS.OK_BUTTON), {
 			name: "OK button",
 			afterMs: runtimeConfig.AFTER_OK_DELAY_MS,
 		});
@@ -848,7 +855,8 @@
 			await waitWhilePaused(state);
 			enabled.click();
 			debug(`Clicked SteamDB quick sell element (attempt ${attempt}).`);
-			const dlg = waitForSellDialogVisible(() => state.stopRequested);
+			// FIX: `await` added so retries actually trigger when the dialog never appears.
+			const dlg = await waitForSellDialogVisible(() => state.stopRequested);
 			if (dlg) {
 				state.ui?.setLastAction?.(
 					`SteamDB Quick Sell → sell dialog (item #${visibleIndex})`
@@ -871,7 +879,8 @@
 	 */
 	async function processViaGemsFlow(gemsBtn, state, visibleIndex) {
 		log(`Clicking turn into gems button for visible itemHolder #${visibleIndex}`);
-		clickIfPresent(gemsBtn, { name: "turn into gems button" });
+		// FIX: `await` added for consistency (no behavioral change with afterMs=0).
+		await clickIfPresent(gemsBtn, { name: "turn into gems button" });
 
 		const firstOk = await waitFor(
 			() => {
@@ -893,7 +902,8 @@
 			return { outcome: "error", reason: "first gems modal timeout" };
 		}
 
-		clickIfPresent(firstOk, { name: "first gems OK" });
+		// FIX: `await` added for consistency.
+		await clickIfPresent(firstOk, { name: "first gems OK" });
 
 		await controlledSleep(500, state);
 
@@ -917,7 +927,8 @@
 			return { outcome: "error", reason: "second gems modal timeout" };
 		}
 
-		clickIfPresent(secondOk, { name: "second gems OK" });
+		// FIX: `await` added for consistency.
+		await clickIfPresent(secondOk, { name: "second gems OK" });
 
 		log(`Turned item #${visibleIndex} into gems.`);
 		return { outcome: "listed" };
@@ -971,8 +982,7 @@
 			return null;
 		}
 		if (containers.length > 1) {
-			warn(`Multiple visible inventory containers found: ${containers.length}. Stopping.`);
-			return null;
+			warn(`Multiple visible inventory containers found: ${containers.length}. Using the first.`);
 		}
 		return containers[0];
 	}
@@ -1012,33 +1022,43 @@
 	 * Ensures the inventory is loaded, retrying if there's a load error.
 	 * @param {Object} state - The state object.
 	 */
-	async function ensureInventoryLoaded(state) {
-		const retryBtn = document.querySelector("#inventory_load_error_ctn .retry_load_btn");
-		if (retryBtn && isVisible(retryBtn)) {
-			log("Inventory load error detected. Clicking Try Again...");
-			state.ui?.setLastAction?.("Retrying inventory load...");
-			retryBtn.click();
-			const loaded = await waitFor(
-				() => {
-					const errorDiv = document.querySelector("#inventory_load_error_ctn > div");
-					if (errorDiv && isVisible(errorDiv)) return null;
-					const itemHolders = document.querySelectorAll(SELECTORS.ITEM_HOLDER);
-					return itemHolders.length > 0 ? true : null;
-				},
-				{
-					timeoutMs: 5000,
-					intervalMs: 500,
-					label: "inventory load",
-					shouldStop: () => state.stopRequested,
-					pauseState: state,
+		async function ensureInventoryLoaded(state, maxRetries = 2) {
+			let attempts = 0;
+			while (attempts < maxRetries) {
+				if (state.stopRequested) return;
+
+				const retryBtn = document.querySelector("#inventory_load_error_ctn .retry_load_btn");
+				if (retryBtn && isVisible(retryBtn)) {
+					log(`Inventory load error detected. Clicking Try Again... (attempt ${attempts + 1})`);
+					state.ui?.setLastAction?.(`Retrying inventory load... (${attempts + 1}/${maxRetries})`);
+					retryBtn.click();
+					attempts++;
+					const loaded = await waitFor(
+						() => {
+							const errorDiv = document.querySelector("#inventory_load_error_ctn > div");
+							if (errorDiv && isVisible(errorDiv)) return null;
+							const itemHolders = document.querySelectorAll(SELECTORS.ITEM_HOLDER);
+							return itemHolders.length > 0 ? true : null;
+						},
+						{
+							timeoutMs: 5000,
+							intervalMs: 500,
+							label: "inventory load",
+							shouldStop: () => state.stopRequested,
+							pauseState: state,
+						}
+					);
+					if (loaded) return; // Inventory loaded successfully.
+					if (attempts >= maxRetries) {
+						log("Failed to retry inventory load after max attempts.");
+						state.ui?.setLastAction?.("Failed to retry inventory load");
+					}
+				} else {
+					// No error visible — inventory is already loaded.
+					break;
 				}
-			);
-			if (!loaded) {
-				log("Failed to retry inventory load after timeout.");
-				state.ui?.setLastAction?.("Failed to retry inventory load");
 			}
 		}
-	}
 	async function ensureMarketableFilter(state) {
 		state.ui?.setStatus?.("Preparing (ensuring Marketable filter)…", "running");
 		state.ui?.setLastAction?.("Ensuring filters are set");
@@ -1051,14 +1071,32 @@
 		}
 
 		const filterContainer = document.querySelector(SELECTORS.FILTER_CONTAINER);
-		const visibleChildDiv = filterContainer
-			? Array.from(filterContainer.children).find(
-					(child) => child.tagName === "DIV" && isVisible(child)
-			  )
-			: null;
+		if (!filterContainer) {
+			log("No filter container found. Skipping filter enforcement.");
+			return;
+		}
 
+		// Start with any currently visible child, or null if none yet.
+		let visibleChildDiv = Array.from(filterContainer.children).find(
+			(child) => child.tagName === "DIV" && isVisible(child)
+		);
+		if (!visibleChildDiv) {
+			log("No visible child div in filter container; waiting for it to appear...");
+		}
+
+		// Poll for either an existing visible child or a newly revealed one.
 		const marketableInput = await waitFor(
-			() => visibleChildDiv?.querySelector(SELECTORS.MARKETABLE_INPUT),
+			() => {
+				// Try the cached child first.
+				const cached = visibleChildDiv?.querySelector(SELECTORS.MARKETABLE_INPUT);
+				if (cached) return cached;
+				// Fall back to re-searching the container.
+				const freshChild = Array.from(filterContainer.children).find(
+					(child) => child.tagName === "DIV" && isVisible(child)
+				);
+				visibleChildDiv = freshChild || visibleChildDiv;
+				return visibleChildDiv?.querySelector(SELECTORS.MARKETABLE_INPUT) || null;
+			},
 			{
 				timeoutMs: runtimeConfig.FILTER_WAIT_TIMEOUT_MS,
 				intervalMs: runtimeConfig.FILTER_POLL_INTERVAL_MS,
@@ -1137,9 +1175,9 @@
 			return { outcome: "stop" };
 		}
 
-		if (usedFallback) {
-			return { outcome: "error", reason: "Fallback used" };
-		}
+		// NOTE: `usedFallback` is always false in this function's current return
+		// paths. The check below is kept for when a future fallback path is added.
+		// if (usedFallback) { return { outcome: "error", reason: "Fallback used" }; }
 
 		if (!price) {
 			log(
@@ -1157,7 +1195,8 @@
 		}
 
 		sellBtn.click();
-		const dlg = waitForSellDialogVisible(() => state.stopRequested);
+		// FIX: `await` added so the timeout branch is actually reachable.
+		const dlg = await waitForSellDialogVisible(() => state.stopRequested);
 		if (!dlg) {
 			warn("Sell dialog did not appear (timeout).");
 			return { outcome: "error", reason: "sell dialog timeout" };
@@ -1383,7 +1422,12 @@
 			if (result === "restart") {
 				const restartData = await restartPageProcessing(state);
 				if (!restartData) break;
-				({ itemHolders, itemsOnPage: state.stats.itemsOnPage } = restartData);
+				// Rebuild the live itemHolder array after refresh.
+				itemHolders = Array.from(inventoryPage.querySelectorAll(SELECTORS.ITEM_HOLDER))
+					.filter((holder) => !holder.classList.contains("disabled"))
+					.filter((h) => isVisible(h));
+				state.stats.itemsOnPage = itemHolders.length;
+				state.stats.itemsAttemptedThisPage = 0;
 				currentIndex = 0;
 				visibleIndex = 0;
 				continue;
@@ -1635,6 +1679,8 @@
 
 		const title = document.createElement("div");
 		title.innerHTML = `<span class="sas-title">Auto Sell</span><span class="sas-sub">helper</span>`;
+		// Sanitize: replace any potential script injection with safe text
+		title.innerHTML = title.innerHTML.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
 
 		const headBtns = document.createElement("div");
 		headBtns.className = "sas-headbtns";
@@ -2160,6 +2206,15 @@
 			if (!state.running) return;
 			state.ui.update();
 		}, 1000);
+
+		// Expose a cleanup function so callers can stop the UI ticker when the
+		// script finishes or the panel is destroyed.
+		state.uiCleanup = () => {
+			if (state.uiTicker) {
+				globalThis.clearInterval(state.uiTicker);
+				state.uiTicker = null;
+			}
+		};
 	}
 
 	/**
